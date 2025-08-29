@@ -33,7 +33,7 @@ jobs:
       with:
         toolchain: ${{ matrix.rust_version }}
 
-    - uses: swatinem/rust-cache@v2
+    # - uses: swatinem/rust-cache@v2
 
     - name: Rust Tests
       run: |
