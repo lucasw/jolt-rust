@@ -3,10 +3,8 @@ use std::ptr;
 use joltc_sys::*;
 
 use crate::{
-    BodyInterface, BroadPhaseLayerInterfaceImpl, ContactListenerImpl, NarrowPhaseQuery,
-    IntoJolt,
-    ObjectLayerPairFilterImpl, ObjectVsBroadPhaseLayerFilterImpl, SimShapeFilterImpl,
-    Vec3,
+    BodyInterface, BroadPhaseLayerInterfaceImpl, ContactListenerImpl, IntoJolt, NarrowPhaseQuery,
+    ObjectLayerPairFilterImpl, ObjectVsBroadPhaseLayerFilterImpl, SimShapeFilterImpl, Vec3,
 };
 
 /// The root of everything for a physics simulation.
@@ -102,10 +100,7 @@ impl PhysicsSystem {
             }
         }
     }
-    pub fn set_gravity(
-        &mut self,
-        in_gravity: Vec3,
-    ) {
+    pub fn set_gravity(&mut self, in_gravity: Vec3) {
         unsafe {
             JPC_PhysicsSystem_SetGravity(self.raw, in_gravity.into_jolt());
         }
