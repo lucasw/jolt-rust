@@ -4,7 +4,9 @@ use joltc_sys::*;
 
 use crate::{
     BodyInterface, BroadPhaseLayerInterfaceImpl, ContactListenerImpl, NarrowPhaseQuery,
+    IntoJolt,
     ObjectLayerPairFilterImpl, ObjectVsBroadPhaseLayerFilterImpl, SimShapeFilterImpl,
+    Vec3,
 };
 
 /// The root of everything for a physics simulation.
@@ -98,6 +100,14 @@ impl PhysicsSystem {
             unsafe {
                 JPC_PhysicsSystem_SetContactListener(self.raw, ptr::null_mut());
             }
+        }
+    }
+    pub fn set_gravity(
+        &mut self,
+        in_gravity: Vec3,
+    ) {
+        unsafe {
+            JPC_PhysicsSystem_SetGravity(self.raw, in_gravity.into_jolt());
         }
     }
 
