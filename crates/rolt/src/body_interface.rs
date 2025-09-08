@@ -79,6 +79,10 @@ impl<'physics_system> BodyInterface<'physics_system> {
         unsafe { JPC_BodyInterface_GetCenterOfMassPosition(self.raw, body_id.raw()).into_rolt() }
     }
 
+    pub fn rotation(&self, body_id: BodyId) -> Quat {
+        unsafe { JPC_BodyInterface_GetRotation(self.raw, body_id.raw()).into_rolt() }
+    }
+
     pub fn linear_velocity(&self, body_id: BodyId) -> Vec3 {
         unsafe { JPC_BodyInterface_GetLinearVelocity(self.raw, body_id.raw()).into_rolt() }
     }
