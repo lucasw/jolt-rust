@@ -167,6 +167,7 @@ fn main() {
                 MotionType: JPC_MOTION_TYPE_DYNAMIC,
                 ObjectLayer: OL_MOVING,
                 Shape: car_body_shape,
+                Rotation: JPC_Quat{x: 0.0500478, y: 0.0042435, z: 0.0152304, w: 0.9986217},
                 ..Default::default()
             })
             .unwrap();
