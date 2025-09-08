@@ -99,7 +99,7 @@ fn main() {
 
         let body_interface = physics_system.body_interface();
 
-        let floor_half_extent = 100.0;
+        let floor_half_extent = 30.0;
         let floor_height = 1.0;
         let floor_shape = create_box(&JPC_BoxShapeSettings {
             HalfExtent: vec3(floor_half_extent, floor_half_extent, floor_height),
@@ -138,7 +138,7 @@ fn main() {
 
         let sphere = body_interface
             .create_body(&JPC_BodyCreationSettings {
-                Position: rvec3(0.0, 0.0, 3.0),
+                Position: rvec3(5.0, 5.0, 3.0),
                 MotionType: JPC_MOTION_TYPE_DYNAMIC,
                 ObjectLayer: OL_MOVING,
                 Shape: sphere_shape,
@@ -150,6 +150,30 @@ fn main() {
         body_interface.add_body(sphere_id, JPC_ACTIVATION_ACTIVATE);
         body_interface.set_linear_velocity(sphere_id, Vec3::new(0.0, 0.0, 1.5));
 
+        // build a car
+        let half_vehicle_length = 2.0;
+        let half_vehicle_width = 0.9;
+        let half_vehicle_height = 0.2;
+        // TODO(lucasw) need to offset center of mass
+        let car_body_shape = create_box(&JPC_BoxShapeSettings {
+            HalfExtent: vec3(half_vehicle_length, half_vehicle_width, half_vehicle_height),
+            ..Default::default()
+        })
+        .unwrap();
+
+        let car_body = body_interface
+            .create_body(&JPC_BodyCreationSettings {
+                Position: rvec3(0.0, 0.0, 3.0),
+                MotionType: JPC_MOTION_TYPE_DYNAMIC,
+                ObjectLayer: OL_MOVING,
+                Shape: car_body_shape,
+                ..Default::default()
+            })
+            .unwrap();
+        let car_body_id = car_body.id();
+        body_interface.add_body(car_body_id, JPC_ACTIVATION_ACTIVATE);
+
+        // setup physics
         physics_system.optimize_broad_phase();
 
         let delta_time = 1.0 / 60.0;
@@ -162,7 +186,6 @@ fn main() {
             step += 1;
 
             let position = body_interface.center_of_mass_position(sphere_id);
-
             rec.log(
                 "world/sphere",
                 &rerun::Points3D::new([[position.x, position.y, position.z]])
@@ -176,6 +199,21 @@ fn main() {
                 "Step {step}: Position = ({}, {}, {}), Velocity = ({}, {}, {})",
                 position.x, position.y, position.z, velocity.x, velocity.y, velocity.z
             );
+
+            let position = body_interface.center_of_mass_position(car_body_id);
+            let quat = body_interface.rotation(car_body_id);
+
+            rec.log(
+                "world/car_body",
+                &rerun::Boxes3D::from_centers_and_half_sizes(
+                    [(position.x, position.y, position.z)],
+                    [(half_vehicle_length, half_vehicle_width, half_vehicle_height)],
+                )
+                .with_quaternions([rerun::Quaternion::from_xyzw([
+                    quat.x, quat.y, quat.z, quat.w,
+                ])]),
+            )
+            .unwrap();
 
             physics_system.update(delta_time, collision_steps, temp_allocator, job_system);
         }
