@@ -236,7 +236,11 @@ fn main() {
             .unwrap();
 
             let wheel_pos1 = rvec3(car_pos.x + x, car_pos.y + y, car_pos.z);
-            let wheel_pos2 = rvec3(wheel_pos1.x, wheel_pos1.y, wheel_pos1.z - half_wheel_travel);
+            let wheel_pos2 = rvec3(
+                wheel_pos1.x,
+                wheel_pos1.y,
+                wheel_pos1.z - half_wheel_travel * 1.5,
+            );
 
             let wheel_body = body_interface
                 .create_body(&JPC_BodyCreationSettings {
@@ -257,6 +261,30 @@ fn main() {
             let wheel_id = wheel_body.id();
             body_interface.add_body(wheel_id, JPC_ACTIVATION_ACTIVATE);
 
+            /*
+            // hinges to let wheels roll
+            let hinge_settings = JPC_HingeConstraintSettings {
+                ConstraintSettings: JPC_ConstraintSettings {
+                    Enabled: true,
+                    ConstraintPriority: 0,
+                    NumVelocityStepsOverride: 0,
+                    NumPositionStepsOverride: 0,
+                    DrawConstraintSize: 1.0,
+                    UserData: 0,
+                },
+                Space: JPC_ConstraintSpace::default(),
+                __bindgen_padding_0: 0,
+                // Point on body1 - the car
+                Point1: wheel_pos1,
+                HingeAxis1: Vec3::Y.into_jolt(),
+                NormalAxis1: Vec3::X.into_jolt(),
+            };
+
+            let constraint = hinge_constraint.cast::<JPC_Constraint>();
+            physics_system.add_constraint(constraint);
+            */
+
+            /*
             // 2.0f, 1.0f, 1.0e5f, 0.0f
             let spring_settings = JPC_SpringSettings {
                 Mode: JPC_SPRING_MODE_FREQUENCY_AND_DAMPING,
@@ -311,6 +339,8 @@ fn main() {
 
             let constraint = slider_constraint.cast::<JPC_Constraint>();
             physics_system.add_constraint(constraint);
+            */
+
             // JPC_PhysicsSystem_AddConstraint(physics_system.raw(), constraint);
 
             // Need better JoltC SixDOF support
@@ -386,7 +416,7 @@ fn main() {
             }
             */
 
-            wheel_ids.push((wheel_id, wheel_radius, slider_constraint));
+            wheel_ids.push((wheel_id, wheel_radius, 0));
         }
 
         // setup physics
@@ -397,7 +427,7 @@ fn main() {
 
         let mut step = 0;
         // while body_interface.is_active(wheel_ids[3]) {
-        for _i in 0..3000 {
+        for _i in 0..1000 {
             rec.set_timestamp_secs_since_epoch("view", step as f64 * delta_time as f64);
 
             step += 1;
@@ -437,12 +467,13 @@ fn main() {
                 // the orientation of a cylinder in Jolt and in rerun are not the same
                 let quat = body_interface.rotation(*wheel_id);
                 let rerun_quat =
-                    rerun::external::glam::Quat::from_euler(
-                        rerun::external::glam::EulerRot::XYZ,
-                        std::f32::consts::FRAC_PI_2,
-                        0.0,
-                        0.0,
-                    ) * rerun::external::glam::Quat::from_xyzw(quat.x, quat.y, quat.z, quat.w);
+                    rerun::external::glam::Quat::from_xyzw(quat.x, quat.y, quat.z, quat.w)
+                        * rerun::external::glam::Quat::from_euler(
+                            rerun::external::glam::EulerRot::XYZ,
+                            std::f32::consts::FRAC_PI_2,
+                            0.0,
+                            0.0, // std::f32::consts::FRAC_PI_2,
+                        );
 
                 // TODO(lucasw) put all the wheels together into one rec.log?
                 rec.log(
