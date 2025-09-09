@@ -150,10 +150,15 @@ fn main() {
         body_interface.add_body(sphere_id, JPC_ACTIVATION_ACTIVATE);
         body_interface.set_linear_velocity(sphere_id, Vec3::new(0.0, 0.0, 1.5));
 
-        // build a car
+        // build a car following the VehicleSixDOFTest.cpp example
         let half_vehicle_length = 2.0;
         let half_vehicle_width = 0.9;
         let half_vehicle_height = 0.2;
+
+        let wheel_radius = 0.3;
+        let half_wheel_width = 0.22;
+        let half_wheel_travel = 0.6;
+
         // TODO(lucasw) need to offset center of mass
         let car_body_shape = create_box(&JPC_BoxShapeSettings {
             HalfExtent: vec3(half_vehicle_length, half_vehicle_width, half_vehicle_height),
@@ -161,18 +166,92 @@ fn main() {
         })
         .unwrap();
 
+        let car_pos = rvec3(0.0, 0.0, 3.0);
         let car_body = body_interface
             .create_body(&JPC_BodyCreationSettings {
-                Position: rvec3(0.0, 0.0, 3.0),
+                Position: car_pos,
                 MotionType: JPC_MOTION_TYPE_DYNAMIC,
                 ObjectLayer: OL_MOVING,
                 Shape: car_body_shape,
-                Rotation: JPC_Quat{x: 0.0500478, y: 0.0042435, z: 0.0152304, w: 0.9986217},
+                // Rotation: JPC_Quat{x: 0.0500478, y: 0.0042435, z: 0.0152304, w: 0.9986217},
+                Rotation: JPC_Quat {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                    w: 1.0,
+                },
+                // TODO(lucasw) MassPropertiesOverride is commented out in JoltC/Functions.h
+                // so don't try the override
+                // OverrideMassProperties: JPC_OVERRIDE_MASS_PROPS_CALC_INERTIA,
+                // would have set Mass to 1500.0 if there was a way
                 ..Default::default()
             })
             .unwrap();
         let car_body_id = car_body.id();
         body_interface.add_body(car_body_id, JPC_ACTIVATION_ACTIVATE);
+
+        let mut wheel_ids = Vec::new();
+
+        // add four wheels
+        for i in 0..4 {
+            let sc = 0.9;
+            let x;
+            let is_front;
+            if i < 2 {
+                x = half_vehicle_length * sc;
+                is_front = true;
+            } else {
+                x = -half_vehicle_length * sc;
+                is_front = false;
+            }
+
+            let y;
+            let is_left;
+            if i % 2 == 0 {
+                y = half_vehicle_width * sc;
+                is_left = true;
+            } else {
+                y = -half_vehicle_width * sc;
+                is_left = false;
+            }
+
+            let wheel_radius = {
+                if is_front {
+                    wheel_radius
+                } else {
+                    wheel_radius * 1.5
+                }
+            };
+            let wheel_shape = create_cylinder(&JPC_CylinderShapeSettings {
+                HalfHeight: half_wheel_width,
+                Radius: wheel_radius,
+                ..Default::default()
+            })
+            .unwrap();
+
+            let wheel_pos1 = rvec3(car_pos.x + x, car_pos.y + y, car_pos.z);
+            let wheel_pos2 = rvec3(wheel_pos1.x, wheel_pos1.y, wheel_pos1.z - half_wheel_travel);
+
+            let wheel = body_interface
+                .create_body(&JPC_BodyCreationSettings {
+                    Position: wheel_pos2,
+                    // Rotation: JPC_Quat{x: 0.7071068, y: 0.0, z: 0.0, w: 0.7071068},
+                    Rotation: JPC_Quat {
+                        x: 0.0,
+                        y: 0.0,
+                        z: 0.0,
+                        w: 1.0,
+                    },
+                    MotionType: JPC_MOTION_TYPE_DYNAMIC,
+                    ObjectLayer: OL_MOVING,
+                    Shape: wheel_shape,
+                    ..Default::default()
+                })
+                .unwrap();
+            let wheel_id = wheel.id();
+            body_interface.add_body(wheel_id, JPC_ACTIVATION_ACTIVATE);
+            wheel_ids.push((wheel_id, wheel_radius));
+        }
 
         // setup physics
         physics_system.optimize_broad_phase();
@@ -181,7 +260,8 @@ fn main() {
         let collision_steps = 1;
 
         let mut step = 0;
-        while body_interface.is_active(sphere_id) {
+        // while body_interface.is_active(wheel_ids[3]) {
+        for _i in 0..1000 {
             rec.set_timestamp_secs_since_epoch("view", step as f64 * delta_time as f64);
 
             step += 1;
@@ -215,6 +295,33 @@ fn main() {
                 ])]),
             )
             .unwrap();
+
+            for (ind, (wheel_id, wheel_radius)) in wheel_ids.iter().enumerate() {
+                let position = body_interface.center_of_mass_position(*wheel_id);
+                // the orientation of a cylinder in Jolt and in rerun are not the same
+                let quat = body_interface.rotation(*wheel_id);
+                let rerun_quat =
+                    rerun::external::glam::Quat::from_euler(
+                        rerun::external::glam::EulerRot::XYZ,
+                        1.5707963,
+                        0.0,
+                        0.0,
+                    ) * rerun::external::glam::Quat::from_xyzw(quat.x, quat.y, quat.z, quat.w);
+
+                // TODO(lucasw) put all the wheels together into one rec.log?
+                rec.log(
+                    format!("world/wheel{ind}"),
+                    &rerun::Cylinders3D::from_lengths_and_radii(
+                        [half_wheel_width * 2.0],
+                        [*wheel_radius],
+                    )
+                    .with_centers([rerun::external::glam::vec3(
+                        position.x, position.y, position.z,
+                    )])
+                    .with_quaternions([rerun_quat]),
+                )
+                .unwrap();
+            }
 
             physics_system.update(delta_time, collision_steps, temp_allocator, job_system);
         }

@@ -16,6 +16,19 @@ pub fn create_box(settings: &JPC_BoxShapeSettings) -> Result<*mut JPC_Shape, CSt
     }
 }
 
+pub fn create_cylinder(settings: &JPC_CylinderShapeSettings) -> Result<*mut JPC_Shape, CString> {
+    let mut shape: *mut JPC_Shape = ptr::null_mut();
+    let mut err: *mut JPC_String = ptr::null_mut();
+
+    unsafe {
+        if JPC_CylinderShapeSettings_Create(settings, &mut shape, &mut err) {
+            Ok(shape)
+        } else {
+            Err(CStr::from_ptr(JPC_String_c_str(err)).to_owned())
+        }
+    }
+}
+
 pub fn create_sphere(settings: &JPC_SphereShapeSettings) -> Result<*mut JPC_Shape, CString> {
     let mut shape: *mut JPC_Shape = ptr::null_mut();
     let mut err: *mut JPC_String = ptr::null_mut();
