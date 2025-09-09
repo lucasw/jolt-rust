@@ -7,7 +7,7 @@ use vehicle::*;
 use rolt::{
     BroadPhaseLayer, BroadPhaseLayerInterface, CastShapeArgs, CastShapeCollectorImpl,
     ClosestHitCastShapeCollector, IntoJolt, ObjectLayer, ObjectLayerPairFilter,
-    ObjectVsBroadPhaseLayerFilter, RShapeCast, RVec3, Vec3,
+    ObjectVsBroadPhaseLayerFilter, Quat, RShapeCast, RVec3, Vec3,
 };
 
 const OL_NON_MOVING: JPC_ObjectLayer = 0;
@@ -111,6 +111,12 @@ fn main() {
         let floor = body_interface
             .create_body(&JPC_BodyCreationSettings {
                 Position: floor_pos,
+                Rotation: JPC_Quat {
+                    y: 0.0500478,
+                    x: 0.0042435,
+                    z: 0.0152304,
+                    w: 0.9986217,
+                },
                 MotionType: JPC_MOTION_TYPE_STATIC,
                 ObjectLayer: OL_NON_MOVING,
                 Shape: floor_shape,
@@ -232,7 +238,7 @@ fn main() {
             let wheel_pos1 = rvec3(car_pos.x + x, car_pos.y + y, car_pos.z);
             let wheel_pos2 = rvec3(wheel_pos1.x, wheel_pos1.y, wheel_pos1.z - half_wheel_travel);
 
-            let wheel = body_interface
+            let wheel_body = body_interface
                 .create_body(&JPC_BodyCreationSettings {
                     Position: wheel_pos2,
                     // Rotation: JPC_Quat{x: 0.7071068, y: 0.0, z: 0.0, w: 0.7071068},
@@ -248,9 +254,139 @@ fn main() {
                     ..Default::default()
                 })
                 .unwrap();
-            let wheel_id = wheel.id();
+            let wheel_id = wheel_body.id();
             body_interface.add_body(wheel_id, JPC_ACTIVATION_ACTIVATE);
-            wheel_ids.push((wheel_id, wheel_radius));
+
+            // 2.0f, 1.0f, 1.0e5f, 0.0f
+            let spring_settings = JPC_SpringSettings {
+                Mode: JPC_SPRING_MODE_FREQUENCY_AND_DAMPING,
+                FrequencyOrStiffness: 2.0,
+                Damping: 1.0,
+            };
+            let motor_settings = JPC_MotorSettings {
+                SpringSettings: spring_settings,
+                MinForceLimit: -1.0e5,
+                MaxForceLimit: 1.0e5,
+                MinTorqueLimit: 0.0,
+                MaxTorqueLimit: 0.0,
+            };
+
+            // suspension
+            let slider_settings = JPC_SliderConstraintSettings {
+                ConstraintSettings: JPC_ConstraintSettings {
+                    Enabled: true,
+                    ConstraintPriority: 0,
+                    NumVelocityStepsOverride: 0,
+                    NumPositionStepsOverride: 0,
+                    DrawConstraintSize: 1.0,
+                    UserData: 0,
+                },
+                Space: JPC_ConstraintSpace::default(),
+                AutoDetectPoint: true,
+                __bindgen_padding_0: 0,
+                // point on body1 - the car?
+                Point1: wheel_pos1,
+                SliderAxis1: Vec3::Z.into_jolt(),
+                NormalAxis1: Vec3::X.into_jolt(),
+                // point on body2- the wheel?
+                Point2: rvec3(0.0, 0.0, 0.0),
+                SliderAxis2: Vec3::Z.into_jolt(),
+                NormalAxis2: Vec3::X.into_jolt(),
+                LimitsMin: -half_wheel_travel,
+                LimitsMax: half_wheel_travel,
+                LimitsSpringSettings: spring_settings,
+                MaxFrictionForce: 0.0,
+                MotorSettings: motor_settings,
+                // ..Default::default()
+            };
+
+            let slider_constraint = JPC_SliderConstraintSettings_Create(
+                &slider_settings,
+                car_body.raw(),
+                wheel_body.raw(),
+            );
+
+            JPC_SliderConstraint_SetMotorState(slider_constraint, JPC_MOTOR_STATE_POSITION);
+            JPC_SliderConstraint_SetTargetPosition(slider_constraint, 0.0);
+
+            let constraint = slider_constraint.cast::<JPC_Constraint>();
+            physics_system.add_constraint(constraint);
+            // JPC_PhysicsSystem_AddConstraint(physics_system.raw(), constraint);
+
+            // Need better JoltC SixDOF support
+            /*
+            // Create constraint
+            let axis_x = {
+                if is_left {
+                    -Vec3::X
+                } else {
+                    Vec3::X
+                }
+            };
+            let axis_y = Vec3::Z;
+            // TODO(lucasw) where to put the motor settings?
+            // Hinges and Sliders have them, but not six dof
+
+            let settings = JPC_SixDOFConstraintSettings {
+                Space: JPC_CONSTRAINT_SPACE_LOCAL_TO_BODY_COM,
+                Position1: wheel_pos1,
+                AxisX1: axis_x.into_jolt(),
+                AxisY1: axis_y.into_jolt(),
+                Position2: wheel_pos2,
+                AxisX2: axis_x.into_jolt(),
+                AxisY2: axis_y.into_jolt(),
+                ..Default::default()
+            };
+
+            /*
+            settings.MakeFixedAxis(EAxis::TranslationX);
+            settings.SetLimitedAxis(EAxis::TranslationY, -half_wheel_travel, half_wheel_travel);
+            settings.MakeFixedAxis(EAxis::TranslationZ);
+            settings.mMotorSettings[EAxis::TranslationY] = motor_settings;
+
+            // Front wheel can rotate around the Z axis for steering
+            if (is_front) {
+                settings.SetLimitedAxis(EAxis::RotationZ, -cMaxSteeringAngle, cMaxSteeringAngle);
+            } else {
+                settings.MakeFixedAxis(EAxis::RotationZ);
+            }
+
+            // The Z axis is static
+            settings.MakeFixedAxis(EAxis::RotationZ);
+
+            // The main engine drives the Y axis
+            settings.MakeFreeAxis(EAxis::RotationY);
+            settings.mMotorSettings[EAxis::RotationY] = MotorSettings(2.0f, 1.0f, 0.0f, 0.5e4f);
+            */
+
+            // The front wheel needs to be able to steer around the Y axis
+            // However the motors work in the constraint space of the wheel, and since this rotates around the
+            // X axis we need to drive both the Y and Z to steer
+            if (is_front) {
+                // settings.mMotorSettings[EAxis::RotationY] = settings.mMotorSettings[EAxis::RotationZ] = MotorSettings(10.0f, 1.0f, 0.0f, 1.0e6f);
+            }
+
+            // TODO(lucasw) this outputs a JPC_Constraint, not a JPC_SixDOFConstraint
+            let wheel_constraint = JPC_SixDOFConstraintSettings_Create(settings, car_body, wheel_body);
+            physics_system.add_constraint(wheel_constraint);
+            // mWheels[i] = wheel_constraint;
+
+            // Drive the suspension
+            wheel_constraint.SetTargetPositionCS(rvec3(0.0, 0.0, -half_wheel_travel));
+            // TODO(lucasw) no motor state for sixdof, only hinge and slider have it
+            // wheel_constraint.SetMotorState(EAxis::TranslationY, EMotorState::Position);
+
+            // The front wheels steer around the Y axis, but in constraint space of the wheel this means we need to drive
+            // both Y and Z (see comment above)
+            if is_front {
+                wheel_constraint.SetTargetOrientationCS(Quat::IDENTITY.into_jolt());
+                // TODO(lucasw) no motor state for sixdof, only hinge and slider have it
+                // wheel_constraint.SetMotorState(EAxis::RotationY, EMotorState::Position);
+                // wheel_constraint.SetMotorState(EAxis::RotationX, EMotorState::Position);
+            }
+            */
+
+            wheel_ids.push((wheel_id, wheel_radius, slider_constraint));
         }
 
         // setup physics
@@ -261,7 +397,7 @@ fn main() {
 
         let mut step = 0;
         // while body_interface.is_active(wheel_ids[3]) {
-        for _i in 0..1000 {
+        for _i in 0..3000 {
             rec.set_timestamp_secs_since_epoch("view", step as f64 * delta_time as f64);
 
             step += 1;
@@ -296,14 +432,14 @@ fn main() {
             )
             .unwrap();
 
-            for (ind, (wheel_id, wheel_radius)) in wheel_ids.iter().enumerate() {
+            for (ind, (wheel_id, wheel_radius, wheel_constraint)) in wheel_ids.iter().enumerate() {
                 let position = body_interface.center_of_mass_position(*wheel_id);
                 // the orientation of a cylinder in Jolt and in rerun are not the same
                 let quat = body_interface.rotation(*wheel_id);
                 let rerun_quat =
                     rerun::external::glam::Quat::from_euler(
                         rerun::external::glam::EulerRot::XYZ,
-                        1.5707963,
+                        std::f32::consts::FRAC_PI_2,
                         0.0,
                         0.0,
                     ) * rerun::external::glam::Quat::from_xyzw(quat.x, quat.y, quat.z, quat.w);
