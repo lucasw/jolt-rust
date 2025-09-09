@@ -312,6 +312,8 @@ fn main() {
                 car_body.raw(),
                 wheel_body.raw(),
             );
+            JPC_HingeConstraint_SetMotorState(hinge_constraint, JPC_MOTOR_STATE_VELOCITY);
+            JPC_HingeConstraint_SetTargetAngularVelocity(hinge_constraint, -0.4);
             let constraint = hinge_constraint.cast::<JPC_Constraint>();
             physics_system.add_constraint(constraint);
 
