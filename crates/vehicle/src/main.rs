@@ -235,12 +235,9 @@ fn main() {
             })
             .unwrap();
 
+            let wheel_z_offset = -half_wheel_travel * 1.5;
             let wheel_pos1 = rvec3(car_pos.x + x, car_pos.y + y, car_pos.z);
-            let wheel_pos2 = rvec3(
-                wheel_pos1.x,
-                wheel_pos1.y,
-                wheel_pos1.z - half_wheel_travel * 1.5,
-            );
+            let wheel_pos2 = rvec3(wheel_pos1.x, wheel_pos1.y, wheel_pos1.z + wheel_z_offset);
 
             let wheel_body = body_interface
                 .create_body(&JPC_BodyCreationSettings {
@@ -258,11 +255,24 @@ fn main() {
                     ..Default::default()
                 })
                 .unwrap();
+            JPC_Body_SetFriction(wheel_body.raw(), 1.0);
             let wheel_id = wheel_body.id();
             body_interface.add_body(wheel_id, JPC_ACTIVATION_ACTIVATE);
 
-            /*
             // hinges to let wheels roll
+            let spring_settings = JPC_SpringSettings {
+                Mode: JPC_SPRING_MODE_FREQUENCY_AND_DAMPING,
+                FrequencyOrStiffness: 2.0,
+                Damping: 1.0,
+            };
+            let motor_settings = JPC_MotorSettings {
+                SpringSettings: spring_settings,
+                MinForceLimit: 0.0,
+                MaxForceLimit: 0.0,
+                MinTorqueLimit: -0.5e4,
+                MaxTorqueLimit: 0.5e4,
+            };
+
             let hinge_settings = JPC_HingeConstraintSettings {
                 ConstraintSettings: JPC_ConstraintSettings {
                     Enabled: true,
@@ -274,15 +284,29 @@ fn main() {
                 },
                 Space: JPC_ConstraintSpace::default(),
                 __bindgen_padding_0: 0,
-                // Point on body1 - the car
-                Point1: wheel_pos1,
+                // Point on body1 - relative to the car
+                Point1: rvec3(x, y, wheel_z_offset),
                 HingeAxis1: Vec3::Y.into_jolt(),
                 NormalAxis1: Vec3::X.into_jolt(),
+                // point on body2- the wheel
+                Point2: rvec3(0.0, 0.0, 0.0),
+                HingeAxis2: Vec3::Y.into_jolt(),
+                NormalAxis2: Vec3::X.into_jolt(),
+                // limits outside of +/- pi means no limits
+                LimitsMin: -2.0 * std::f32::consts::PI,
+                LimitsMax: 2.0 * std::f32::consts::PI,
+                LimitsSpringSettings: spring_settings,
+                MaxFrictionTorque: 0.0,
+                MotorSettings: motor_settings,
             };
 
+            let hinge_constraint = JPC_HingeConstraintSettings_Create(
+                &hinge_settings,
+                car_body.raw(),
+                wheel_body.raw(),
+            );
             let constraint = hinge_constraint.cast::<JPC_Constraint>();
             physics_system.add_constraint(constraint);
-            */
 
             /*
             // 2.0f, 1.0f, 1.0e5f, 0.0f
