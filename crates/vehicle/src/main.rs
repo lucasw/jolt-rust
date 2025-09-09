@@ -100,23 +100,24 @@ fn main() {
         let body_interface = physics_system.body_interface();
 
         let floor_half_extent = 30.0;
-        let floor_height = 1.0;
+        let floor_half_height = 1.0;
         let floor_shape = create_box(&JPC_BoxShapeSettings {
-            HalfExtent: vec3(floor_half_extent, floor_half_extent, floor_height),
+            HalfExtent: vec3(floor_half_extent, floor_half_extent, floor_half_height),
             ..Default::default()
         })
         .unwrap();
 
-        let floor_pos = rvec3(0.0, 0.0, -1.0);
+        let floor_pos = rvec3(0.0, 0.0, 1.0);
+        let floor_quat = JPC_Quat {
+            y: 0.0500478,
+            x: 0.0042435,
+            z: 0.0152304,
+            w: 0.9986217,
+        };
         let floor = body_interface
             .create_body(&JPC_BodyCreationSettings {
                 Position: floor_pos,
-                Rotation: JPC_Quat {
-                    y: 0.0500478,
-                    x: 0.0042435,
-                    z: 0.0152304,
-                    w: 0.9986217,
-                },
+                Rotation: floor_quat,
                 MotionType: JPC_MOTION_TYPE_STATIC,
                 ObjectLayer: OL_NON_MOVING,
                 Shape: floor_shape,
@@ -127,11 +128,17 @@ fn main() {
         body_interface.add_body(floor_id, JPC_ACTIVATION_DONT_ACTIVATE);
         rec.log_static(
             "world/floor",
-            &rerun::Boxes3D::from_half_sizes([(
-                floor_half_extent,
-                floor_half_extent,
-                floor_height,
-            )]),
+            &rerun::Boxes3D::from_centers_and_half_sizes(
+                [(floor_pos.x, floor_pos.y, floor_pos.z)],
+                [(floor_half_extent, floor_half_extent, floor_half_height)],
+            )
+            // .with_fill_mode(rerun::FillMode::Solid)
+            .with_quaternions([rerun::Quaternion::from_xyzw([
+                floor_quat.x,
+                floor_quat.y,
+                floor_quat.z,
+                floor_quat.w,
+            ])]),
         )
         .unwrap();
 
@@ -172,7 +179,7 @@ fn main() {
         })
         .unwrap();
 
-        let car_pos = rvec3(0.0, 0.0, 3.0);
+        let car_pos = rvec3(0.0, 0.0, 4.0);
         let car_body = body_interface
             .create_body(&JPC_BodyCreationSettings {
                 Position: car_pos,
@@ -480,6 +487,7 @@ fn main() {
                     [(position.x, position.y, position.z)],
                     [(half_vehicle_length, half_vehicle_width, half_vehicle_height)],
                 )
+                .with_fill_mode(rerun::FillMode::Solid)
                 .with_quaternions([rerun::Quaternion::from_xyzw([
                     quat.x, quat.y, quat.z, quat.w,
                 ])]),
