@@ -57,6 +57,43 @@ impl ObjectLayerPairFilter for ObjectLayerPair {
     }
 }
 
+fn default_constraint_settings() -> JPC_ConstraintSettings {
+    JPC_ConstraintSettings {
+        Enabled: true,
+        ConstraintPriority: 0,
+        NumVelocityStepsOverride: 0,
+        NumPositionStepsOverride: 0,
+        DrawConstraintSize: 1.0,
+        UserData: 0,
+    }
+}
+
+fn make_wheel_hinge(
+    wheel_attach_point: Vec3,
+    spring_settings: &JPC_SpringSettings,
+    motor_settings: &JPC_MotorSettings,
+) -> JPC_HingeConstraintSettings {
+    JPC_HingeConstraintSettings {
+        ConstraintSettings: default_constraint_settings(),
+        Space: JPC_ConstraintSpace::default(),
+        __bindgen_padding_0: 0,
+        // Point on body1 - relative to the car or steering body
+        Point1: wheel_attach_point.into_jolt(),
+        HingeAxis1: Vec3::Y.into_jolt(),
+        NormalAxis1: Vec3::X.into_jolt(),
+        // point on body2- the wheel
+        Point2: rvec3(0.0, 0.0, 0.0),
+        HingeAxis2: Vec3::Y.into_jolt(),
+        NormalAxis2: Vec3::X.into_jolt(),
+        // limits outside of +/- pi means no limits
+        LimitsMin: -2.0 * std::f32::consts::PI,
+        LimitsMax: 2.0 * std::f32::consts::PI,
+        LimitsSpringSettings: *spring_settings,
+        MaxFrictionTorque: 0.0,
+        MotorSettings: *motor_settings,
+    }
+}
+
 fn main() {
     let rec = rerun::RecordingStreamBuilder::new("jolt_with_rerun")
         .spawn()
@@ -187,12 +224,7 @@ fn main() {
                 ObjectLayer: OL_MOVING,
                 Shape: car_body_shape,
                 // Rotation: JPC_Quat{x: 0.0500478, y: 0.0042435, z: 0.0152304, w: 0.9986217},
-                Rotation: JPC_Quat {
-                    x: 0.0,
-                    y: 0.0,
-                    z: 0.0,
-                    w: 1.0,
-                },
+                Rotation: Quat::IDENTITY.into_jolt(),
                 // TODO(lucasw) MassPropertiesOverride is commented out in JoltC/Functions.h
                 // so don't try the override
                 // OverrideMassProperties: JPC_OVERRIDE_MASS_PROPS_CALC_INERTIA,
@@ -204,6 +236,8 @@ fn main() {
         body_interface.add_body(car_body_id, JPC_ACTIVATION_ACTIVATE);
 
         let mut wheel_ids = Vec::new();
+        let mut wheel_constraints = Vec::new();
+        let mut steering_constraints = Vec::new();
 
         // add four wheels
         for i in 0..4 {
@@ -228,6 +262,7 @@ fn main() {
                 is_left = false;
             }
 
+            /*
             let wheel_radius = {
                 if is_front {
                     wheel_radius
@@ -235,6 +270,7 @@ fn main() {
                     wheel_radius * 1.5
                 }
             };
+            */
             let wheel_shape = create_cylinder(&JPC_CylinderShapeSettings {
                 HalfHeight: half_wheel_width,
                 Radius: wheel_radius,
@@ -242,7 +278,7 @@ fn main() {
             })
             .unwrap();
 
-            let wheel_z_offset = -half_wheel_travel * 1.5;
+            let wheel_z_offset = -half_wheel_travel * 2.0;
             let wheel_pos1 = rvec3(car_pos.x + x, car_pos.y + y, car_pos.z);
             let wheel_pos2 = rvec3(wheel_pos1.x, wheel_pos1.y, wheel_pos1.z + wheel_z_offset);
 
@@ -262,7 +298,7 @@ fn main() {
                     ..Default::default()
                 })
                 .unwrap();
-            JPC_Body_SetFriction(wheel_body.raw(), 1.0);
+            JPC_Body_SetFriction(wheel_body.raw(), 0.25);
             let wheel_id = wheel_body.id();
             body_interface.add_body(wheel_id, JPC_ACTIVATION_ACTIVATE);
 
@@ -280,42 +316,127 @@ fn main() {
                 MaxTorqueLimit: 0.5e4,
             };
 
-            let hinge_settings = JPC_HingeConstraintSettings {
-                ConstraintSettings: JPC_ConstraintSettings {
-                    Enabled: true,
-                    ConstraintPriority: 0,
-                    NumVelocityStepsOverride: 0,
-                    NumPositionStepsOverride: 0,
-                    DrawConstraintSize: 1.0,
-                    UserData: 0,
-                },
-                Space: JPC_ConstraintSpace::default(),
-                __bindgen_padding_0: 0,
-                // Point on body1 - relative to the car
-                Point1: rvec3(x, y, wheel_z_offset),
-                HingeAxis1: Vec3::Y.into_jolt(),
-                NormalAxis1: Vec3::X.into_jolt(),
-                // point on body2- the wheel
-                Point2: rvec3(0.0, 0.0, 0.0),
-                HingeAxis2: Vec3::Y.into_jolt(),
-                NormalAxis2: Vec3::X.into_jolt(),
-                // limits outside of +/- pi means no limits
-                LimitsMin: -2.0 * std::f32::consts::PI,
-                LimitsMax: 2.0 * std::f32::consts::PI,
-                LimitsSpringSettings: spring_settings,
-                MaxFrictionTorque: 0.0,
-                MotorSettings: motor_settings,
+            // steering hinges
+            let wheel_hinge_constraint = {
+                if is_front {
+                    // TODO(lucasw) spring settings are used within the motor and within the hinge-
+                    // should they be different?
+                    let steering_spring_settings = JPC_SpringSettings {
+                        Mode: JPC_SPRING_MODE_STIFFNESS_AND_DAMPING,
+                        FrequencyOrStiffness: 2.0,
+                        Damping: 1.0,
+                    };
+
+                    let steering_motor_settings = JPC_MotorSettings {
+                        SpringSettings: steering_spring_settings,
+                        MinForceLimit: 0.0,
+                        MaxForceLimit: 0.0,
+                        MinTorqueLimit: -2.5e5,
+                        MaxTorqueLimit: 2.5e5,
+                    };
+
+                    let steering_hinge_settings = JPC_HingeConstraintSettings {
+                        ConstraintSettings: default_constraint_settings(),
+                        Space: JPC_ConstraintSpace::default(),
+                        __bindgen_padding_0: 0,
+                        // Point on body1 - relative to the car
+                        Point1: rvec3(x, y, wheel_z_offset * 0.5),
+                        HingeAxis1: Vec3::Z.into_jolt(),
+                        NormalAxis1: Vec3::X.into_jolt(),
+                        // point on body2- the steering body
+                        Point2: rvec3(0.0, 0.0, 0.0),
+                        HingeAxis2: Vec3::Z.into_jolt(),
+                        NormalAxis2: Vec3::X.into_jolt(),
+                        // limits outside of +/- pi means no limits
+                        LimitsMin: -0.25 * std::f32::consts::PI,
+                        LimitsMax: 0.25 * std::f32::consts::PI,
+                        LimitsSpringSettings: steering_spring_settings,
+                        MaxFrictionTorque: 0.0,
+                        MotorSettings: steering_motor_settings,
+                    };
+                    let steering_shape = create_box(&JPC_BoxShapeSettings {
+                        HalfExtent: vec3(0.1, 0.1, 0.2),
+                        ..Default::default()
+                    })
+                    .unwrap();
+
+                    let steering_body = body_interface
+                        .create_body(&JPC_BodyCreationSettings {
+                            Position: rvec3(
+                                wheel_pos1.x,
+                                wheel_pos1.y,
+                                wheel_pos1.z + wheel_z_offset * 0.5,
+                            ),
+                            Rotation: Quat::IDENTITY.into_jolt(),
+                            MotionType: JPC_MOTION_TYPE_DYNAMIC,
+                            ObjectLayer: OL_MOVING,
+                            Shape: steering_shape,
+                            ..Default::default()
+                        })
+                        .unwrap();
+                    // will get a crash if a constraint is added to physics without adding the body
+                    let steering_body_id = steering_body.id();
+                    body_interface.add_body(steering_body_id, JPC_ACTIVATION_ACTIVATE);
+
+                    let steering_hinge_constraint = JPC_HingeConstraintSettings_Create(
+                        &steering_hinge_settings,
+                        car_body.raw(),
+                        steering_body.raw(),
+                    );
+                    if true {
+                        JPC_HingeConstraint_SetMotorState(
+                            steering_hinge_constraint,
+                            JPC_MOTOR_STATE_POSITION,
+                        );
+                        JPC_HingeConstraint_SetTargetAngle(
+                            steering_hinge_constraint,
+                            0.23 * std::f32::consts::PI,
+                        );
+                    } else {
+                        JPC_HingeConstraint_SetMotorState(
+                            steering_hinge_constraint,
+                            JPC_MOTOR_STATE_OFF,
+                        );
+                    }
+                    let constraint = steering_hinge_constraint.cast::<JPC_Constraint>();
+                    physics_system.add_constraint(constraint);
+                    steering_constraints.push((steering_hinge_constraint, steering_body_id));
+
+                    let wheel_attach_point = Vec3 {
+                        x: 0.0,
+                        y: 0.0,
+                        z: wheel_z_offset * 0.5,
+                    };
+                    let hinge_settings =
+                        make_wheel_hinge(wheel_attach_point, &spring_settings, &motor_settings);
+                    JPC_HingeConstraintSettings_Create(
+                        &hinge_settings,
+                        steering_body.raw(),
+                        wheel_body.raw(),
+                    )
+                } else {
+                    let wheel_attach_point = Vec3 {
+                        x,
+                        y,
+                        z: wheel_z_offset,
+                    };
+                    let hinge_settings =
+                        make_wheel_hinge(wheel_attach_point, &spring_settings, &motor_settings);
+                    JPC_HingeConstraintSettings_Create(
+                        &hinge_settings,
+                        car_body.raw(),
+                        wheel_body.raw(),
+                    )
+                }
             };
 
-            let hinge_constraint = JPC_HingeConstraintSettings_Create(
-                &hinge_settings,
-                car_body.raw(),
-                wheel_body.raw(),
-            );
-            JPC_HingeConstraint_SetMotorState(hinge_constraint, JPC_MOTOR_STATE_VELOCITY);
-            JPC_HingeConstraint_SetTargetAngularVelocity(hinge_constraint, -0.4);
-            let constraint = hinge_constraint.cast::<JPC_Constraint>();
+            if true {
+                JPC_HingeConstraint_SetMotorState(wheel_hinge_constraint, JPC_MOTOR_STATE_VELOCITY);
+                JPC_HingeConstraint_SetTargetAngularVelocity(wheel_hinge_constraint, -0.5);
+            }
+            let constraint = wheel_hinge_constraint.cast::<JPC_Constraint>();
             physics_system.add_constraint(constraint);
+            wheel_constraints.push(wheel_hinge_constraint);
 
             /*
             // 2.0f, 1.0f, 1.0e5f, 0.0f
@@ -520,6 +641,33 @@ fn main() {
                         position.x, position.y, position.z,
                     )])
                     .with_quaternions([rerun_quat]),
+                )
+                .unwrap();
+            }
+
+            for (ind, (steering_hinge_constraint, steering_body_id)) in
+                steering_constraints.iter().enumerate()
+            {
+                let position = body_interface.center_of_mass_position(*steering_body_id);
+                let position = (position.x, position.y, position.z);
+                // the orientation of a cylinder in Jolt and in rerun are not the same
+                let quat = body_interface.rotation(*steering_body_id);
+
+                let rerun_quat =
+                    rerun::external::glam::Quat::from_xyzw(quat.x, quat.y, quat.z, quat.w);
+                /*
+                        * rerun::external::glam::Quat::from_euler(
+                            rerun::external::glam::EulerRot::XYZ,
+                            std::f32::consts::FRAC_PI_2,
+                            0.0,
+                            0.0, // std::f32::consts::FRAC_PI_2,
+                        );
+                */
+                rec.log(
+                    format!("world/steer{ind}"),
+                    &rerun::Boxes3D::from_centers_and_half_sizes([position], [(0.1, 0.1, 0.2)])
+                        .with_fill_mode(rerun::FillMode::Solid)
+                        .with_quaternions([rerun_quat]),
                 )
                 .unwrap();
             }
