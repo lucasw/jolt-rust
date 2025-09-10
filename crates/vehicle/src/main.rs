@@ -158,6 +158,7 @@ fn main() {
                 MotionType: JPC_MOTION_TYPE_STATIC,
                 ObjectLayer: OL_NON_MOVING,
                 Shape: floor_shape,
+                Friction: 2.5,
                 ..Default::default()
             })
             .unwrap();
@@ -298,7 +299,7 @@ fn main() {
                     ..Default::default()
                 })
                 .unwrap();
-            JPC_Body_SetFriction(wheel_body.raw(), 0.25);
+            JPC_Body_SetFriction(wheel_body.raw(), 0.95);
             let wheel_id = wheel_body.id();
             body_interface.add_body(wheel_id, JPC_ACTIVATION_ACTIVATE);
 
@@ -433,7 +434,7 @@ fn main() {
 
             if true {
                 JPC_HingeConstraint_SetMotorState(wheel_hinge_constraint, JPC_MOTOR_STATE_VELOCITY);
-                JPC_HingeConstraint_SetTargetAngularVelocity(wheel_hinge_constraint, -0.5);
+                JPC_HingeConstraint_SetTargetAngularVelocity(wheel_hinge_constraint, -4.5);
             }
             let constraint = wheel_hinge_constraint.cast::<JPC_Constraint>();
             physics_system.add_constraint(constraint);
@@ -596,7 +597,8 @@ fn main() {
             )
             .unwrap();
 
-            let velocity = body_interface.linear_velocity(sphere_id);
+            // get velocity in world frame
+            let velocity = body_interface.linear_velocity(car_body_id);
             println!(
                 "Step {step}: Position = ({}, {}, {}), Velocity = ({}, {}, {})",
                 position.x, position.y, position.z, velocity.x, velocity.y, velocity.z
