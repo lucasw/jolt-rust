@@ -321,9 +321,10 @@ fn main() {
                 if is_front {
                     // TODO(lucasw) spring settings are used within the motor and within the hinge-
                     // should they be different?
+                    // 10.0f, 1.0f, 0.0f, 1.0e6f
                     let steering_spring_settings = JPC_SpringSettings {
-                        Mode: JPC_SPRING_MODE_STIFFNESS_AND_DAMPING,
-                        FrequencyOrStiffness: 2.0,
+                        Mode: JPC_SPRING_MODE_FREQUENCY_AND_DAMPING,
+                        FrequencyOrStiffness: 10.0,
                         Damping: 1.0,
                     };
 
@@ -331,8 +332,8 @@ fn main() {
                         SpringSettings: steering_spring_settings,
                         MinForceLimit: 0.0,
                         MaxForceLimit: 0.0,
-                        MinTorqueLimit: -2.5e5,
-                        MaxTorqueLimit: 2.5e5,
+                        MinTorqueLimit: -1.0e6,
+                        MaxTorqueLimit: 1.0e6,
                     };
 
                     let steering_hinge_settings = JPC_HingeConstraintSettings {
@@ -581,7 +582,7 @@ fn main() {
 
         let mut step = 0;
         // while body_interface.is_active(wheel_ids[3]) {
-        for _i in 0..1000 {
+        for _i in 0..4000 {
             rec.set_timestamp_secs_since_epoch("view", step as f64 * delta_time as f64);
 
             step += 1;
