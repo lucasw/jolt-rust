@@ -14,7 +14,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest]
+        # os: [windows-latest, ubuntu-latest]
+        os: [ubuntu-latest]
         rust_version: [stable]
         build_flags: ["", "--features double-precision", "--features object-layer-u32", "--all-features"]
         # exclude:
@@ -33,9 +34,10 @@ jobs:
     - name: get vulkan sdk
       run: |
         pwd
+        # TODO(lucasw) get windows sdk if in windows
         curl -o vulkan.tar.xz https://sdk.lunarg.com/sdk/download/1.4.321.1/linux/vulkansdk-linux-x86_64-1.4.321.1.tar.xz
         tar xf vulkan*.tar.xz
-        . 1.4.321.1/setup-env.sh
+        source 1.4.321.1/setup-env.sh
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
@@ -51,7 +53,7 @@ jobs:
     - name: Rust Tests
       run: |
         pwd
-        . 1.4.321.1/setup-env.sh
+        source 1.4.321.1/setup-env.sh
         cargo test --verbose --workspace ${{ matrix.build_flags }}
 
   rustfmt:
