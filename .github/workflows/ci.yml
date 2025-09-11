@@ -48,7 +48,9 @@ jobs:
 
     - name: Install rerun
       run: |
-        cargo binstall --force rerun-cli@0.24.1
+        pip3 install rerun-sdk
+        # cargo binstall rerun-cli
+        # cargo binstall --force rerun-cli@0.24.1
 
     - name: Rust Tests
       run: |
