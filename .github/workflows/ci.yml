@@ -35,7 +35,7 @@ jobs:
         pwd
         curl -o vulkan.tar.xz https://sdk.lunarg.com/sdk/download/1.4.321.1/linux/vulkansdk-linux-x86_64-1.4.321.1.tar.xz
         tar xf vulkan*.tar.xz
-        source 1.4.321.1/setup-env.sh
+        . 1.4.321.1/setup-env.sh
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
@@ -44,10 +44,14 @@ jobs:
 
     # - uses: swatinem/rust-cache@v2
 
+    - name: Install rerun
+      run: |
+        cargo binstall --force rerun-cli@0.24.1
+
     - name: Rust Tests
       run: |
         pwd
-        source 1.4.321.1/setup-env.sh
+        . 1.4.321.1/setup-env.sh
         cargo test --verbose --workspace ${{ matrix.build_flags }}
 
   rustfmt:
