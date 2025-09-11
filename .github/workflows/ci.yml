@@ -26,19 +26,10 @@ jobs:
     steps:
 
     - name: get vulkan sdk
-      if: runner.os == 'Windows'
       run: |
         pwd
-        curl https://sdk.lunarg.com/sdk/download/1.4.321.1/linux/vulkansdk-linux-x86_64-1.4.321.1.tar.xz
+        curl -o vulkan.tar.xz https://sdk.lunarg.com/sdk/download/1.4.321.1/linux/vulkansdk-linux-x86_64-1.4.321.1.tar.xz
         tar xvf vulkan*.tar.xz
-        source 1.4.321.1/setup-env.sh
-
-    - name: get vulkan sdk
-      if: runner.os == 'Linux'
-      run: |
-        pwd
-        curl https://sdk.lunarg.com/sdk/download/1.4.321.1/linux/vulkansdk-linux-x86_64-1.4.321.1.tar.xz > vulkan.tar.xz
-        tar xvf vulkan.tar.xz
         source 1.4.321.1/setup-env.sh
 
     - uses: actions/checkout@v4
