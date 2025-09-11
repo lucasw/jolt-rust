@@ -25,16 +25,17 @@ jobs:
 
     steps:
 
+      # checkout deletes the current directory, so checkout before curl into same dir
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+
     - name: get vulkan sdk
       run: |
         pwd
         curl -o vulkan.tar.xz https://sdk.lunarg.com/sdk/download/1.4.321.1/linux/vulkansdk-linux-x86_64-1.4.321.1.tar.xz
-        tar xvf vulkan*.tar.xz
+        tar xf vulkan*.tar.xz
         source 1.4.321.1/setup-env.sh
-
-    - uses: actions/checkout@v4
-      with:
-        submodules: 'recursive'
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
